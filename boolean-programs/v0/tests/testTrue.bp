@@ -1,0 +1,5 @@
+decl x;
+main() {
+    x = True;
+   while (True) skip;
+}

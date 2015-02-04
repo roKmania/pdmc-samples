@@ -1,0 +1,8 @@
+never { /* G!Ends */
+accept_init:
+  if
+  :: ((!(Ends))) -> goto accept_init
+  fi;
+accept_S4:
+  skip
+}

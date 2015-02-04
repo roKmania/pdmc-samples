@@ -1,0 +1,15 @@
+never { /* F(!xIsFalse & !xIsTrue & Final) */
+T0_init:
+  if
+  :: ((Final) && (!(xIsFalse)) && (!(xIsTrue))) -> goto accept_all
+  :: ((!(Final)) && (!(xIsFalse)) && (!(xIsTrue))) -> goto T0_S3
+  :: ((!(Final)) || (xIsFalse) || (xIsTrue)) -> goto T0_init
+  fi;
+T0_S3:
+  if
+  :: ((Final)) -> goto accept_all
+  :: ((!(Final))) -> goto T0_S3
+  fi;
+accept_all:
+  skip
+}

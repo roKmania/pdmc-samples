@@ -1,0 +1,20 @@
+s() {
+  if (*) {
+    x = ! x;
+    s();
+  } else
+    skip;
+  return x;
+}
+
+decl x,y;
+
+main() {
+  x = False;
+  while (True) {
+     y = s();
+  }
+}
+
+
+

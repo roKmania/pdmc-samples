@@ -1,0 +1,19 @@
+s() {
+  if (*)
+    x = ! x;
+  else
+    skip;
+  return x;
+}
+
+decl x, y;
+
+main() {
+  x = False;
+  s();
+  y = !x;
+  return y;
+}
+
+
+

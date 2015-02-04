@@ -1,0 +1,1 @@
+krun tests/test2.bp --ltl-file formulae/test2.ltl

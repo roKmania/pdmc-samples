@@ -1,0 +1,8 @@
+never { /* G!xIsTrue */
+accept_init:
+  if
+  :: ((!(xIsTrue))) -> goto accept_init
+  fi;
+accept_all:
+  skip
+}

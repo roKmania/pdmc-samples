@@ -1,0 +1,21 @@
+s() {
+  if (*) 
+    skip; 
+  else {
+Else:
+    s();
+AfterRec:
+    x = ! x;
+  }
+  if (x) goto Else;
+  else goto AfterRec;
+Ends: skip;
+}
+
+decl x;
+
+main() {
+  x = False;
+Rec:
+  s();
+}

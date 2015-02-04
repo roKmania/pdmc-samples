@@ -1,0 +1,14 @@
+never { /* F(xIsTrue & G!yIsFalse) */
+T0_init:
+  if
+  :: ((xIsTrue) && (!(yIsFalse))) -> goto accept_S2
+  :: ((true)) -> goto T0_init
+  fi;
+accept_S2:
+  if
+  :: ((!(yIsFalse))) -> goto accept_S2
+  fi;
+accept_all:
+  skip
+}
+
