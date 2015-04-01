@@ -116,6 +116,7 @@ module BP
       <strict> .K </strict>
       <crnt-function> .Map </crnt-function> 
       <returning> false </returning>
+      <nextLoc> 0 </nextLoc>
     </T>
 
 
@@ -124,13 +125,15 @@ module BP
   rule <k> decl .Ids; => . ...</k> [structural]
 
   rule <k> decl ((X:Id, Xs:Ids) => Xs); ...</k>
-       <env>... .Map =>  (X |-> !L:Int) ...</env>
-       <store>... .Map => (!L:Int |-> *) ...</store>
+       <env>... .Map =>  (X |-> L:Int) ...</env>
+       <store>... .Map => (L:Int |-> *) ...</store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
   [structural]
 
   rule <k> F:Id ( Xs:Ids ) { Ss:Stmts } => . ...</k>
-       <env>... .Map =>  (F |-> !L:Int) ...</env>
-       <store>... .Map => (!L:Int |-> F :: lambda ( Xs , Ss )) ...</store>
+       <env>... .Map =>  (F |-> L:Int) ...</env>
+       <store>... .Map => (L:Int |-> F :: lambda ( Xs , Ss )) ...</store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
   [structural]
 
 // the execution of the main function
@@ -185,10 +188,12 @@ module BP
   rule <k> E1:Exp || HOLE => E1 || V ...</k>
        <strict> V:KResult => .K </strict> [structural]
 
-  rule <k> F:Id(Es:Exps) =>  bindto(Xs, Es) ~> execute(Ss return;)  ...</k>
+  rule <k> F:Id(Es:Exps) =>  preprocess(Xs, Es) ~> execute(Ss return;)  ...</k>
        <env>... F |-> L:Int ...</env>
        <store>... L |-> F :: lambda(Xs:Ids, Ss:Stmts) ...</store>
 
+
+  rule preprocess(Xs:Ids, Es:Exps) => evaluate(Es) ~> bindto(Xs)
 
 //@ \texttt{bindto} binds formal parameters to actual parameters 
   syntax Kitem ::= "bindto" "(" Exps "," Exps ")"
@@ -198,9 +203,10 @@ module BP
   [structural] 
 
   rule <k> bindto((X:Id, Xs:Ids => Xs),(HOLE, Es:Exps => Es)) ...</k>
-       <env>... .Map => X |-> !L:Int  ...</env>
-       <store>... .Map => !L:Int |-> V ...</store>
+       <env>... .Map => X |-> L:Int  ...</env>
+       <store>... .Map => L:Int |-> V ...</store>
        <strict> V:KResult => .K </strict>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
   [structural]
 
   rule bindto((.Exps), (.Exps)) => .K 
@@ -251,7 +257,7 @@ module BP
 
   syntax K ::= unfreeze(K) [function]
   rule unfreeze(S:Stmt ~> Ss:K) => S ~> unfreeze(Ss)
-  rule unfreeze(frozen(Ss1:K) ~> Ss2:K) => Ss1 ~> unfreeze(Ss2)
+  rule unfreeze(frozen(Ss1:K) ~> Ss2:K) => unfreeze(Ss1) ~> unfreeze(Ss2)
   rule unfreeze(.K) => .K
 
   rule <k> loadSegment(Lbl:Id : S:Stmt ~> Ss:K) => loadSegment(S ~> Ss) ...</k>

@@ -6,7 +6,9 @@ spec	: module [ module ] *
 */
 
 //syntax Spec ::= List{Module, ""}
-syntax Spec ::= Module | Spec Spec [right, seqspec]
+syntax Spec ::=
+     Module 
+   | Spec Spec [right, seqspec]
 
 /*
 module	: proctype	// proctype declaration \\
@@ -22,8 +24,9 @@ module	: proctype	// proctype declaration \\
   syntax Module ::=
        Proctype
      | Init
-     | Mtype
-     | Decl ";"  [declmod]
+     | Mtype ";"               // not exactly as in the grammar 
+     | DeclList ";" [declmod]  // not exactly as in the grammar 
+     | Macro    // not in the grammar
 
 /*
 proctype: [ active ] PROCTYPE name '(' [ decl_lst ]')'
@@ -33,13 +36,15 @@ proctype: [ active ] PROCTYPE name '(' [ decl_lst ]')'
 //partial defined
   syntax Proctype ::=
        "proctype" Id "(" DeclList ")" "{" Sequence "}"
-//     |  "proctype" Id "(" ")" "{" Sequence "}"
+     |  "proctype" Id "(" ")" "{" Sequence "}"
+     | "inline" Id "(" DeclList ")" "{" Sequence "}"
+     |  "inline" Id "(" ")" "{" Sequence "}"
 
 /*
 init	: INIT [ priority ] '{' sequence '}'
 */
 
-// partial defined
+// partial defined 
   syntax Init ::= "init" "{" Sequence "}"
 
 /*
@@ -48,7 +53,9 @@ never	: NEVER	'{' sequence '}'
 trace	: TRACE '{' sequence '}'
 
 utype	: TYPEDEF name '{' decl_lst '}'
+*/
 
+/*
 mtype	: MTYPE [ '=' ] '{' name [ ',' name ] * '}'
 */
 
@@ -62,32 +69,50 @@ mtype	: MTYPE [ '=' ] '{' name [ ',' name ] * '}'
 decl_lst: one_decl [ ';' one_decl ] *
 */
 
-  syntax DeclList ::= List{Decl, ";"}
-//  syntax DeclList ::= Decl | DeclList ";" DeclList [right]
+//  syntax DeclList ::= List{Decl, ";"}
+
+  syntax DeclList ::= Decl | DeclList ";" DeclList [right, declist, klabel("declComp")]
+
+  syntax priorities declmod > declist
 
 /*
 one_decl: [ visible ] typename  ivar [',' ivar ] *
+*/
+
+//partial defined
+
+  syntax Decl ::= Typename IvarList
+
+  syntax IvarList ::= List{Ivar, ","}
+/*
+ivar    : name [ '[' const ']' ] [ '=' any_expr | '=' ch_init ]
+*/
+  syntax Ivar ::=
+       Id
+     | Id "=" Expr                  [ivar, klabel("initIvarSimple")]
+     | Id "=" ChInit                [ivar, klabel("chInitIvarSimple")] 
+     | Id "[" Expr "]"             [klabel("ivarArr")]
+     | Id "[" Expr "]" "=" Expr    [ivar, klabel("initIvarArr")]
+     | Id "[" Expr "]" "=" ChInit  [ivar, klabel("chInitIvarArr")]
+
+/*
 
 typename: BIT | BOOL | BYTE | SHORT | INT | MTYPE | CHAN
 	| uname	// user defined type names (see utype) \\
 */
 
-//partial defined
-  syntax Decl ::= 
-      Typename Id     [decl]
-     | Typename Id "=" Expr 
-     | Typename Id "=" ChInit
-     | Typename Id "[" Int "]"
-     | Typename Id "[" Int "]" "=" Expr
-     | Typename Id "[" Int "]" "=" ChInit
-
-//  syntax IvarList ::= List{Ivar, ","}
-
   syntax Typename ::=
        "int"
+     | "byte"
+     | "bit"
      | "bool"
      | "chan"
+     | "mtype"
 
+// Macros (not in the grammar)
+
+  syntax Macro ::=
+       "#define" Id Const
 
 /*
 active  : ACTIVE [ '[' const ']' ]	// instantiation \\
@@ -101,8 +126,13 @@ visible	: HIDDEN | SHOW
 sequence: step [ ';' step ] *
 */
 
-   syntax Sequence ::= List{Step, ";"}
+//   syntax Sequence ::= List{Step, ";"} [sequence]
 
+  syntax Sequence ::=
+       Step
+     | Sequence ";" Sequence [right, sequence, klabel("sequenceComp")]
+
+  syntax priorities sequence > declmod
 
 /*
 step    : stmnt	[ UNLESS stmnt ]
@@ -114,17 +144,17 @@ step    : stmnt	[ UNLESS stmnt ]
 // partial defined
   syntax Step ::=
        Stmt
-     | DeclList
+     | Decl
 
 /*
-ivar    : name [ '[' const ']' ] [ '=' any_expr | '=' ch_init ]
 
 ch_init : '[' const ']' OF '{' typename [ ',' typename ] * '}'
 */
 
 // partial defined
   syntax ChInit ::= 
-       "of" TypenameList
+       "of" "{" TypenameList "}"
+     | "[" Const "]" "of" "{" TypenameList "}"
 
 //  syntax TypenameList ::= List{Typename, ","}
   syntax TypenameList ::= Typename | TypenameList "," TypenameList [right]
@@ -135,7 +165,7 @@ varref	: name [ '[' any_expr ']' ] [ '.' varref ]
 
   syntax Varref ::= 
        Id
-     | Id "[" Expr "]"
+     | Id "[" Expr "]"  [klabel("varrefArr")]
 
 /*
 send    : varref '!' send_args		// normal fifo send \\
@@ -153,7 +183,7 @@ receive : varref '?' recv_args		// normal receive \\
 */
 
 // partial defined
-  syntax Receive ::= Varref "?" VarrefList
+  syntax Receive ::= Varref "?" RecvArgs
   syntax VarrefList ::= List{Varref, ","}
 
 /*
@@ -179,6 +209,10 @@ recv_arg : varref | EVAL '(' varref ')' | [ '-' ] const
 
   syntax RecvargList ::= List{Recvarg, ","}
 
+  syntax RecvArgs ::=
+       RecvargList
+     | Recvarg "(" RecvargList ")"
+
 /*
 assign  : varref '=' any_expr	// standard assignment \\
 	| varref '+' '+'	// increment \\
@@ -186,9 +220,11 @@ assign  : varref '=' any_expr	// standard assignment \\
 */
 
   syntax Assign ::=
-       Varref "=" Expr [assign]
+       Varref "=" Expr [assign, klabel("assign")]
      | Varref "++" [inc]
      | Varref "--" [dec]
+
+  syntax priorities assign > ivar
 
 /*
 stmnt	: IF options FI		// selection \\
@@ -225,13 +261,17 @@ stmnt	: IF options FI		// selection \\
      | "break"
      | "print" "(" String ")"
      | "print" "(" String "," ExprList ")"
+     | "printf" "(" String ")"
+     | "printf" "(" String "," ExprList ")"
      | "assert" Expr
      > "if" OptionList "fi"
      | "do" OptionList "od"
      | "atomic" "{" Sequence "}"
      | "{" Sequence "}"
      | Id ":" Stmt
+     > Stmt "->" Sequence    [guard]
 
+  syntax priorities  guard > sequence
 
 /*
 range	: varref ':' expr '..' expr
@@ -286,7 +326,7 @@ name	: alpha [ alpha | number ] *
 const	: TRUE | FALSE | SKIP | number [ number ] *
 */
 
-  syntax Const ::= Int | Bool | "skip"
+  syntax Const ::= Int | Bool | "skip" | Id
 
   syntax Expr ::=
        Varref
@@ -297,7 +337,9 @@ const	: TRUE | FALSE | SKIP | number [ number ] *
      | "(" Expr ")" [bracket]
      > "!" Expr
      | "run" Id "(" ExprList ")"
-     | "run" Id "[" Int "]" "(" ExprList ")" 
+     | "run" Id "[" Int "]" "(" ExprList ")"
+     | Id "(" ExprList ")"
+     | Id "[" Int "]" "(" ExprList ")" 
      > Expr "*" Expr [left, mult]
      | Expr "/" Expr [left, div]
      | Expr "%" Expr [left, mod]
@@ -312,71 +354,6 @@ const	: TRUE | FALSE | SKIP | number [ number ] *
      > Expr "&&" Expr [left, and]
      | Expr "||" Expr [left, or]
 
-
-/////// old stuf ////
-
-/*
-  syntax Val ::= Int | Bool
-
-  syntax Exp ::=
-       Id
-     | Val
-     | "_pid"
-     | "(" Exp ")" [bracket]
-     > "!" Exp
-     | "run" Id "(" Exps ")"
-     | "printf" "(" String ")"
-     | Id "[" Exp "]" 
-     | Id "++"  
-     | Id "--"  
-     > Exp "*" Exp [left]
-     | Exp "/" Exp [left]
-     | Exp "%" Exp [left]
-     > Exp "+" Exp [left]
-     | Exp "-" Exp [left]
-     > Exp "==" Exp [left] 
-     | Exp "!=" Exp [left]
-     | Exp "<=" Exp [left]
-     | Exp ">=" Exp [left]
-     | Exp "<" Exp [left]
-     | Exp ">" Exp [left]
-     > Exp "&&" Exp [left]
-     | Exp "||" Exp [left]
-     > Id "?" Exps 
-     | Id "!" Exps 
-     | "[" Int "]" "of" "{" Ids "}"
-     > Id "=" Exp 
-     > Id "[" Exp "]" "=" Exp 
-
-
-  syntax Ids ::= List{Id, ","}
-  syntax Exps ::= List{Exp, ","}
-//  syntax ExpSeq ::= List{Exp, ";"}
-
-  syntax ExpSeq ::= Exp | Exp ";" ExpSeq
-
-
-  syntax Decl ::=
-       "int" Exps
-     | "bool" Exps
-     | "chan" Exps
-     | "mtype" "=" "{" Ids "}"
-
-  syntax DeclSeq ::= List{Decl, ";"}
-
-  syntax Stmt ::= 
-       Decl ";"
-     | ExpSeq
-     | "proctype" Id "(" DeclSeq ")" "{" Stmts "}"
-     | "init" "{" Stmts "}"
-     | Exp "->" Stmt
-     | "::" Stmts
-     | "if" Stmts "fi" ";"
-     | "do" Stmts "od" ";"
-     > Id ":" Stmt
-
-  syntax Stmts ::= List{Stmt, ""}
-*/
 
 endmodule
 
@@ -403,73 +380,61 @@ module PML
   syntax KResult ::= Const      
 
   rule S1:Spec S2:Spec => S1 ~> S2
+
   rule <kproc> S1:Spec S2:Spec => S1 ~> S2 </kproc>
-/*
-  rule D:Decl ; Ds:Decls => D ~> Ds
-  rule <kproc> D:Decl ; Ds:Decls => D ~> Ds </kproc>
 
-  rule int .Exps ; =>  .K
-  rule <kproc> int .Exps ; =>  .K </kproc>
-
-  rule <k> int ((X:Expr, Es:ExprList) => Es); ...</k>
-       <genv>... .Map =>  (X |-> L:Int) ...</genv>
-       <store>... .Map => (L:Int |-> 0) ...</store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-    requires isId(X) ==K true
-    [structural]
-
-  rule <k> bool ((X:Expr, Es:ExprList) => Es); ...</k>
-       <genv>... .Map =>  (X |-> L:Int) ...</genv>
-       <store>... .Map => (L:Int |-> false) ...</store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-    requires isId(X) ==K true
-    [structural]
-
-  rule <k> int ((X:Id = V:Const, Es:ExprList) => Es); ...</k>
-       <genv>... .Map =>  (X |-> L:Int) ...</genv>
-       <store>... .Map => (L:Int |-> V) ...</store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-    requires isId(X) ==K true
-    [structural]
-
-  rule <k> int ((X:Expr, Es:ExprList) => Es); ...</k>
-       <env>... .Map =>  (X |-> L:Int) ...</env>
-       <store>... .Map => (L:Int |-> 0) ...</store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-    requires isId(X) ==K true
-    [structural]
-
-  rule <k> bool ((X:Expr, Es:ExprList) => Es); ...</k>
-       <env>... .Map =>  (X |-> L:Int) ...</env>
-       <store>... .Map => (L:Int |-> false) ...</store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-    requires isId(X) ==K true
-    [structural]
-
-  rule <k> int ((X:Id = V:Const, Es:ExprList) => Es); ...</k>
-       <env>... .Map =>  (X |-> L:Int) ...</env>
-       <store>... .Map => (L:Int |-> V) ...</store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-    requires isId(X) ==K true
-    [structural]
-*/
 
   syntax Const ::= initVal(Typename) [function]
   rule initVal(int) => 0
+  rule initVal(byte) => 0
+  rule initVal(bit) => 0
   rule initVal(bool) => false
 
-  rule <k> T:Typename X:Id; => .K ...</k>
+// macros (are stored as global variables
+  rule <k> #define X:Id C:Const => .K ...</k>
+       <genv>... .Map =>  (X |-> L:Int) ...</genv>
+       <store>... .Map => (L:Int |-> C) ...</store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+    [structural]
+
+// global variables
+
+  rule <k> T:Typename .IvarList; => .K ...</k>
+
+  rule <kproc> T:Typename .IvarList; => .K ...</kproc>
+
+  rule <k> T:Typename (X:Id, Xs => Xs); ...</k>
        <genv>... .Map =>  (X |-> L:Int) ...</genv>
        <store>... .Map => (L:Int |-> initVal(T)) ...</store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
     [structural]
 
-  rule <k> T:Typename X:Id[N:Int]; => alloc(N, X, T) ...</k>
+  rule <kproc> T:Typename (X:Id, Xs => Xs); ...</kproc>
+       <env>... .Map =>  (X |-> L:Int) ...</env>
+       <store>... .Map => (L:Int |-> initVal(T)) ...</store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+    [structural]
+
+
+  rule <k> T:Typename X:Id[E:Expr], Xs; => E ~> T X[HOLE], Xs; ...</k>
+    requires isKResult(E) =/=K true
+  rule <k> V:Int ~>  T:Typename X:Id[HOLE], Xs; => T X[V], Xs; ...</k>
+
+  rule <k> T:Typename X:Id[N:Int], Xs; => alloc(N, X, T) ~> T Xs; ...</k>
+
+  rule <kproc> T:Typename X:Id[N:Int], Xs; => alloc(N, X, T) ~> T Xs; ...</kproc>
 
   syntax KItem ::= alloc(Int, Id, Typename)
 
   rule <k> alloc((N:Int => N -Int 1) , X:Id, T:Typename) ...</k>
-       <genv>... .Map =>  (X[N -Int 1] |-> L:Int) ...</genv>
+       <genv>... .Map =>  (X[N -Int 1]::Ivar |-> L:Int) ...</genv>
+       <store>... .Map => (L:Int |-> initVal(T)) ...</store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+    requires N >Int 0
+    [structural]
+
+  rule <kproc> alloc((N:Int => N -Int 1) , X:Id, T:Typename) ...</kproc>
+       <env>... .Map =>  (X[N -Int 1]::Ivar |-> L:Int) ...</env>
        <store>... .Map => (L:Int |-> initVal(T)) ...</store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
     requires N >Int 0
@@ -477,14 +442,41 @@ module PML
 
   rule <k> alloc(0 , _:Id, _:Typename) => .K ...</k>
 
-  rule <k> T:Typename X:Id = V:Const; => .K ...</k>
+  rule <kproc> alloc(0 , _:Id, _:Typename) => .K ...</kproc>
+
+  rule <k> T:Typename (X:Id = E:Expr)::Ivar => E ~> T (X = HOLE:Expr)::Ivar ...</k>
+       requires isKResult(E) =/=K true [structural]
+
+  rule <k> T:Typename (X:Id = HOLE:Expr)::Ivar => T (X = V:Expr)::Ivar ...</k>
+       <strict> V => .K </strict>
+       requires isKResult(V) ==K true
+    [structural]
+
+  rule <k> T:Typename (X:Id = V:Const)::Ivar => .K ...</k>
        <genv>... .Map =>  (X |-> L:Int) ...</genv>
        <store>... .Map => (L:Int |-> V) ...</store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
     [structural]
 
+  rule <kproc> T:Typename (X:Id = E:Expr)::Ivar => E ~> T (X = HOLE:Expr)::Ivar ...</kproc>
+       requires isKResult(E) =/=K true [structural]
+
+  rule <kproc> T:Typename (X:Id = HOLE:Expr)::Ivar => T (X = V:Expr)::Ivar ...</kproc>
+       <strict> V => .K </strict>
+       requires isKResult(V) ==K true
+    [structural]
+
+  rule <kproc> T:Typename (X:Id = V:Const)::Ivar => .K ...</kproc>
+       <env>... .Map =>  (X |-> L:Int) ...</env>
+       <store>... .Map => (L:Int |-> V) ...</store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+    [structural]
 
   syntax KItem ::= lambda(DeclList, Sequence)
+
+  syntax DeclList ::= ".DeclList"
+
+  rule proctype P:Id ( ) { Ss:Sequence } => proctype P( .DeclList ) { Ss }
 
   rule <k> proctype P:Id ( Xs:DeclList ) { Ss:Sequence } => .K ...</k>
        <genv>... .Map =>  (P |-> L:Int) ...</genv>
@@ -509,6 +501,11 @@ module PML
   rule S1:Step; S2:Step => S1 ~> S2
   rule <kproc> S1:Step; S2:Step => S1 ~> S2 </kproc>
 
+  rule run P:Id [I:Int] (Es:ExprList) => run P (Es) ~> run P[I -Int 1] (Es)
+    requires I >Int 0
+
+  rule run P:Id [0] (Es:ExprList) => run P (Es)
+
   rule <k> run P:Id (Es:ExprList) => loadGenv(PID) ~> bindTo(Ds, Es) ...</k>
        <genv>... P |-> L:Int ...</genv>
        <store>... L |-> lambda(Ds:DeclList, Ss:Sequence) ...</store>
@@ -532,6 +529,7 @@ module PML
   syntax KItem ::= bindTo(DeclList, ExprList)
 
   rule bindTo(.DeclList, .ExprList) => .K
+
 
   rule <k> .K => S </k>
        <crntProc> _ => PID </crntProc>
@@ -569,18 +567,18 @@ module PML
        <store>... L |-> V:Const ...</store>
        <strict> _ => V </strict>
 
-  rule <kproc> X:Id = E:Expr => E ~> X = HOLE ...</kproc>
+  rule <kproc> (X:Id = E:Expr)::Assign => E ~> (X = HOLE)::Assign ...</kproc>
        requires isKResult(E) =/=K true [structural]
-  rule <kproc> X = HOLE  => X = V ...</kproc>
-       <strict> V => .K </strict> [structural]
+  rule <kproc> (X:Id = HOLE)::Assign  => (X = V)::Assign ...</kproc>
+       <strict> V:Const => .K </strict> [structural]
 
-  rule <kproc> X:Id = V:Const => .K ...</kproc>
+  rule <kproc> (X:Id = V:Const)::Assign => .K ...</kproc>
        <pid> PID:Int </pid>
        <genv>... X |-> L:Int ...</genv>
        <store>... L |-> (_ => V) ...</store>
        <waitForStateChange> _ => .List </waitForStateChange>
 
-  rule <kproc> X:Id = V:Const => .K ...</kproc>
+  rule <kproc> (X:Id = V:Const)::Assign => .K ...</kproc>
        <pid> PID:Int </pid>
        <env>... X |-> L:Int ...</env>
        <genv> GEnv:Map </genv>
@@ -588,12 +586,12 @@ module PML
        <waitForStateChange> _ => .List </waitForStateChange>
     requires notBool X in keys(GEnv)
 
-  rule <k> (X:Id = E:Expr) => (E ~> X = HOLE) ...</k>
+  rule <k> (X:Id = E:Expr)::Assign => (E ~> (X = HOLE)::Assign) ...</k>
        requires isKResult(E) =/=K true [structural]
-  rule <k> (X = HOLE)  => (X = V) ...</k>
-       <strict> V => .K </strict> [structural]
+  rule <k> (X:Id = HOLE)::Assign  => (X = V)::Assign ...</k>
+       <strict> V:Const => .K </strict> [structural]
 
-  rule <k> X:Id = V:Const => .K ...</k>
+  rule <k> (X:Id = V:Const)::Assign => .K ...</k>
        <pid> PID </pid>
        <env>... X |-> L:Int ...</env>
        <crntProc> PID:Int </crntProc>
@@ -644,11 +642,14 @@ module PML
        <strict> _ => V </strict>
   [structural]
 
+  rule  <kproc> _pid => PID ...</kproc>
+        <pid> PID </pid>
+
 
 //  Auxiliary functions
 
   rule isAtomic(run _:Id (_:ExprList)) => true
-  rule isAtomic(_:Id = _:Expr) => true
+  rule isAtomic(_:Varref = _:Expr) => true
   rule isAtomic(_:Step) => false [owise]
 
   syntax Bool ::= isBooleanExpr(Expr) [function]
@@ -837,6 +838,13 @@ module PML
        requires isKResult(E2) =/=K true [structural]
   rule <k> E1:Expr || HOLE => E1 || V ...</k>
        <strict> V:KResult => .K </strict> [structural]
+
+
+// statements
+
+  rule <k> do Opns od => if Opns fi; do Opns od ...</k>
+
+  rule <kproc> do Opns od => if Opns fi; do Opns od ...</kproc>
 
 
 endmodule

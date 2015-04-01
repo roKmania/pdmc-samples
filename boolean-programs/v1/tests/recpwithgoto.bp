@@ -13,7 +13,6 @@ Ends: skip;
 }
 
 decl x;
-
 main() {
   x = False;
 Rec:
