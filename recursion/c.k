@@ -3,6 +3,7 @@ require "int-impl.k"
 module C-SYNTAX
   syntax Type  ::= "int"
                  | "char"
+                 | "void"
 
   syntax Decl  ::= Type Exps  [klabel(decl)]
 
@@ -51,14 +52,15 @@ module C-SYNTAX
 
   syntax Stmt  ::= Block
                  | "#include" "<iostream>"
-                 | "if" "(" Exp ")"                 [if]
-                 | Block "else" Block               [else]
-                 | "while" "(" Exp ")" Block        [while]
-                 | "return" Exp ";"                 [return]
-                 | Decl "(" Decls ")" "{" Stmt "}"  [declfun]
-                 | Decl ";"                         [klabel(declStmt), declvars]
-                 > Exp ";"                         [klabel(expStmt), expstmt]
-                 > Stmt Stmt                        [left]
+                 | "while" "(" Exp ")" Stmt           [while]
+                 | "return" ";"                       [return]
+                 | "return" Exp ";"                   [return]
+                 | Decl "(" Decls ")" "{" Stmt "}"    [declfun]
+                 | Decl ";"                           [klabel(declStmt), declvars]
+                 | "if" "(" Exp ")" Stmt "else" Stmt  [ifelse]
+                 > "if" "(" Exp ")" Stmt              [if, avoid]
+                 > Exp ";"                            [klabel(expStmt), expstmt]
+                 > Stmt Stmt                          [left]
 
   syntax Ids   ::= List{Id,","}
   syntax Exps  ::= List{Exp,","}
@@ -697,6 +699,14 @@ module C
 
 // Statements
 
+  rule [empty-block]:
+       {} => .K
+    [transition]
+
+  rule [block]:
+       { Ss } => Ss
+    [transition]
+
   rule S1:Stmt S2:Stmt => S1 ~> S2
     [structural]
 
@@ -710,7 +720,10 @@ module C
     [structural]
   rule [exp-stmt]:
        V:Val; => .K
-  [transition]
+    [transition]
+
+  rule if (E2) S1 => if (E2) S1 else {}
+    [structural]
 
   rule [heat-if]:
        if (E2) S1 else S2 => E2 ~> if (HOLE) S1 else S2
@@ -721,19 +734,21 @@ module C
        <strict> V:KResult => .K </strict>
     [transition]
   rule [if-true]:
-       if ( I ) S1:Block else _:Block  => S1 
+       if ( I ) S1 else _  => S1 
     requires I !=int 0
     [transition]
   rule [if-false]:
-       if ( I ) _:Block else S2:Block => S2  
+       if ( I ) _ else S2 => S2  
     requires I ==int 0
     [transition]
 
   rule [while]:
-       while ( E:Exp ) S:Block
+       while ( E:Exp ) S
        =>
        if ( E ) { S  while ( E:Exp ) S }  else {}
     [structural]
+
+  rule return; => return noVal;
 
   rule [heat-return]:
        return E:Exp; => E ~> return HOLE;
